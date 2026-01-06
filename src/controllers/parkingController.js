@@ -1,110 +1,100 @@
 // src/controllers/parkingController.js
-const mysql = require("mysql2");
-const db = mysql.createConnection({
-  host: "localhost",
-  user: "root",
-  password: "",
-  database: "smart_parking_database"
-});
-
-db.connect(err => {
-  if (err) console.log(":", err);
-  else console.log("");
-});
-
-module.exports = db;
-
+const pool = require("../index"); // PostgreSQL pool from index.js
 
 // ADD PARKING LOT (ADMIN)
-const addParkingLot = (req, res) => {
+const addParkingLot = async (req, res) => {
   const { name, location, total2W, total4W } = req.body;
 
   if (!name || !location || total2W == null || total4W == null) {
     return res.status(400).json({ message: "All fields are required" });
   }
 
-  const sql = `
-    INSERT INTO parking_lots 
-    (name, location, total2W, total4W, available2W, available4W)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `;
+  try {
+    const query = `
+      INSERT INTO parking_lots
+      (name, location, total2W, total4W, available2W, available4W)
+      VALUES ($1, $2, $3, $4, $3, $4)
+      RETURNING id
+    `;
 
-  db.query(
-    sql,
-    [name, location, total2W, total4W, total2W, total4W],
-    (err, result) => {
-      if (err) {
-        console.error("Add parking error:", err);
-        return res.status(500).json({ message: "Database error" });
-      }
+    const result = await pool.query(query, [
+      name,
+      location,
+      total2W,
+      total4W,
+    ]);
 
-      res.status(201).json({
-        message: "Parking lot added successfully",
-        id: result.insertId,
-      });
-    }
-  );
+    res.status(201).json({
+      message: "Parking lot added successfully",
+      id: result.rows[0].id,
+    });
+  } catch (err) {
+    console.error("Add parking error:", err);
+    res.status(500).json({ message: "Database error" });
+  }
 };
 
-// ✅ GET ALL PARKING LOTS (THIS FIXES YOUR HOME SCREEN)
-const getAllParkingLots = (req, res) => {
-  const sql = "SELECT * FROM parking_lots";
-
-  db.query(sql, (err, result) => {
-    if (err) {
-      console.error("Fetch parking error:", err);
-      return res.status(500).json({ message: "Database error" });
-    }
-
-    res.json(result); // 🔥 THIS MAKES CARDS APPEAR AGAIN
-  });
+// ✅ GET ALL PARKING LOTS (FIXES HOME SCREEN)
+const getAllParkingLots = async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM parking_lots");
+    res.json(result.rows); // ✅ IMPORTANT
+  } catch (err) {
+    console.error("Fetch parking error:", err);
+    res.status(500).json({ message: "Database error" });
+  }
 };
 
 // UPDATE PARKING LOT (ADMIN)
-const updateParkingLot = (req, res) => {
+const updateParkingLot = async (req, res) => {
   const { id } = req.params;
   const { name, location, total2W, total4W } = req.body;
 
-  const sql = `
-    UPDATE parking_lots 
-    SET name = ?, location = ?, total2W = ?, total4W = ?
-    WHERE id = ?
-  `;
+  try {
+    const query = `
+      UPDATE parking_lots
+      SET name = $1, location = $2, total2W = $3, total4W = $4
+      WHERE id = $5
+    `;
 
-  db.query(
-    sql,
-    [name, location, total2W, total4W, id],
-    (err, result) => {
-      if (err) {
-        console.error("Update parking error:", err);
-        return res.status(500).json({ message: "Database error" });
-      }
+    const result = await pool.query(query, [
+      name,
+      location,
+      total2W,
+      total4W,
+      id,
+    ]);
 
-      if (result.affectedRows === 0) {
-        return res.status(404).json({ message: "Parking lot not found" });
-      }
-
-      res.json({ message: "Parking lot updated successfully" });
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: "Parking lot not found" });
     }
-  );
+
+    res.json({ message: "Parking lot updated successfully" });
+  } catch (err) {
+    console.error("Update parking error:", err);
+    res.status(500).json({ message: "Database error" });
+  }
 };
 
 // DELETE PARKING LOT (ADMIN)
-const deleteParkingLot = (req, res) => {
+const deleteParkingLot = async (req, res) => {
   const { id } = req.params;
 
-  db.query("DELETE FROM parking_lots WHERE id = ?", [id], (err, result) => {
-    if (err) {
-      console.error("Delete parking error:", err);
-      return res.status(500).json({ message: "Database error" });
-    }
+  try {
+    const result = await pool.query(
+      "DELETE FROM parking_lots WHERE id = $1",
+      [id]
+    );
 
-    if (result.affectedRows === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ message: "Parking lot not found" });
     }
 
     res.json({ message: "Parking lot deleted successfully" });
-  });
+  } catch (err) {
+    console.error("Delete parking error:", err);
+    res.status(500).json({ message: "Database error" });
+  }
 };
 
 module.exports = {

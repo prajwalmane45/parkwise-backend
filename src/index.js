@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const mysql = require("mysql2");
+
 
 const app = express();
 
@@ -10,20 +10,23 @@ app.use(cors());
 app.use(express.json());
 
 /* -------------------- DATABASE -------------------- */
-const db = mysql.createConnection({
-  host: "localhost",
-  user: "root",
-  password: "",
-  database: "smart_parking_database"
+const { Pool } = require("pg");
+
+const pool = new Pool({
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
+  database: process.env.DB_NAME,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  ssl: { rejectUnauthorized: false }
 });
 
-db.connect(err => {
-  if (err) {
-    console.log(" DB connection failed:", err);
-  } else {
-    console.log(" Connected to MySQL Database");
-  }
-});
+pool.connect()
+  .then(() => console.log("✅ Connected to PostgreSQL"))
+  .catch(err => console.error("❌ PostgreSQL connection error:", err));
+
+module.exports = pool;
+
 
 /* -------------------- ROUTES -------------------- */
 const authRoutes = require("./routes/authRoutes");
