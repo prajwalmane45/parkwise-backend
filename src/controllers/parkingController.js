@@ -1,5 +1,4 @@
-// src/controllers/parkingController.js
-const pool = require("../index"); // PostgreSQL pool from index.js
+const pool = require("../config/db");
 
 // ADD PARKING LOT (ADMIN)
 const addParkingLot = async (req, res) => {
@@ -12,7 +11,7 @@ const addParkingLot = async (req, res) => {
   try {
     const query = `
       INSERT INTO parking_lots
-      (name, location, total2W, total4W, available2W, available4W)
+      (name, location, total2w, total4w, available2w, available4w)
       VALUES ($1, $2, $3, $4, $3, $4)
       RETURNING id
     `;
@@ -34,11 +33,11 @@ const addParkingLot = async (req, res) => {
   }
 };
 
-// ✅ GET ALL PARKING LOTS (FIXES HOME SCREEN)
+// GET ALL PARKING LOTS
 const getAllParkingLots = async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM parking_lots");
-    res.json(result.rows); // ✅ IMPORTANT
+    res.json(result.rows);
   } catch (err) {
     console.error("Fetch parking error:", err);
     res.status(500).json({ message: "Database error" });
@@ -53,8 +52,8 @@ const updateParkingLot = async (req, res) => {
   try {
     const query = `
       UPDATE parking_lots
-      SET name = $1, location = $2, total2W = $3, total4W = $4
-      WHERE id = $5
+      SET name=$1, location=$2, total2w=$3, total4w=$4
+      WHERE id=$5
     `;
 
     const result = await pool.query(query, [

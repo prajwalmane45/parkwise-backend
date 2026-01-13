@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { makePayment } = require('../controllers/bookingController');
 const verifyToken = require('../middleware/authMiddleware');
 
-// Dummy payment route
-router.post('/pay', verifyToken, makePayment);
+// Dummy payment route (no DB needed)
+router.post('/pay', verifyToken, (req, res) => {
+  res.json({ message: " payment success" });
+});
 
 module.exports = router;
