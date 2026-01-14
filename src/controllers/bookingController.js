@@ -20,9 +20,9 @@ const createBooking = async (req, res) => {
     }
 
     if (endDateTime <= startDateTime) {
-      return res
-        .status(400)
-        .json({ message: "Exit time must be after entry time" });
+      return res.status(400).json({
+        message: "Exit time must be after entry time",
+      });
     }
 
     const diffMs = endDateTime - startDateTime;
@@ -42,11 +42,13 @@ const createBooking = async (req, res) => {
 
     const lot = parkingRows[0];
 
-    if (vehicleType === "2W" && lot.available2w <= 0)
+    if (vehicleType === "2W" && lot.available2w <= 0) {
       return res.status(400).json({ message: "No 2W slots available" });
+    }
 
-    if (vehicleType === "4W" && lot.available4w <= 0)
+    if (vehicleType === "4W" && lot.available4w <= 0) {
       return res.status(400).json({ message: "No 4W slots available" });
+    }
 
     const slotColumn =
       vehicleType === "2W" ? "available2w" : "available4w";
@@ -58,7 +60,7 @@ const createBooking = async (req, res) => {
     );
 
     // 🔹 Insert booking
-    const [insertResult] = await db.query(
+    const [result] = await db.query(
       `INSERT INTO booking
       (user_id, parking_lot_id, vehicle_no, vehicle_type, start_time, end_time, amount, payment_status, paid)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'Paid', 'Yes')`,
@@ -75,7 +77,7 @@ const createBooking = async (req, res) => {
 
     res.status(201).json({
       message: "Booking successful",
-      bookingId: insertResult.insertId,
+      bookingId: result.insertId,
       amount,
       hours,
     });
@@ -99,7 +101,7 @@ const getMyBookings = async (req, res) => {
 
     res.json(rows);
   } catch (err) {
-    console.error(err);
+    console.error("Get bookings error:", err);
     res.status(500).json({ message: "DB error" });
   }
 };
@@ -122,6 +124,7 @@ const cancelBooking = async (req, res) => {
     const slotColumn =
       booking.vehicle_type === "2W" ? "available2w" : "available4w";
 
+    // restore slot
     await db.query(
       `UPDATE parking_lots SET ${slotColumn} = ${slotColumn} + 1 WHERE id = ?`,
       [booking.parking_lot_id]
@@ -131,17 +134,20 @@ const cancelBooking = async (req, res) => {
 
     await db.query(
       `UPDATE booking
-       SET payment_status='Cancelled',
-           paid='No',
-           refund_amount=?,
-           cancellation_time=NOW()
-       WHERE booking_id=?`,
+       SET payment_status = 'Cancelled',
+           paid = 'No',
+           refund_amount = ?,
+           cancellation_time = NOW()
+       WHERE booking_id = ?`,
       [refundAmount, bookingId]
     );
 
-    res.json({ message: "Booking cancelled", refundAmount });
+    res.json({
+      message: "Booking cancelled",
+      refundAmount,
+    });
   } catch (err) {
-    console.error(err);
+    console.error("Cancel booking error:", err);
     res.status(500).json({ message: "Cancel failed" });
   }
 };
