@@ -1,4 +1,4 @@
-const pool = require("../config/db");
+const db = require("../config/db");
 
 // ================= CREATE BOOKING =================
 const createBooking = async (req, res) => {
@@ -31,16 +31,16 @@ const createBooking = async (req, res) => {
     const amount = hours * ratePerHour;
 
     // 🔹 Get parking lot
-    const parkingResult = await pool.query(
-      "SELECT * FROM parking_lots WHERE id = $1",
+    const [parkingRows] = await db.query(
+      "SELECT * FROM parking_lots WHERE id = ?",
       [parkingId]
     );
 
-    if (parkingResult.rows.length === 0) {
+    if (parkingRows.length === 0) {
       return res.status(404).json({ message: "Parking lot not found" });
     }
 
-    const lot = parkingResult.rows[0];
+    const lot = parkingRows[0];
 
     if (vehicleType === "2W" && lot.available2w <= 0)
       return res.status(400).json({ message: "No 2W slots available" });
@@ -52,17 +52,16 @@ const createBooking = async (req, res) => {
       vehicleType === "2W" ? "available2w" : "available4w";
 
     // 🔹 Update slot count
-    await pool.query(
-      `UPDATE parking_lots SET ${slotColumn} = ${slotColumn} - 1 WHERE id = $1`,
+    await db.query(
+      `UPDATE parking_lots SET ${slotColumn} = ${slotColumn} - 1 WHERE id = ?`,
       [parkingId]
     );
 
     // 🔹 Insert booking
-    const insertResult = await pool.query(
+    const [insertResult] = await db.query(
       `INSERT INTO booking
       (user_id, parking_lot_id, vehicle_no, vehicle_type, start_time, end_time, amount, payment_status, paid)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,'Paid','Yes')
-      RETURNING booking_id`,
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'Paid', 'Yes')`,
       [
         userId,
         parkingId,
@@ -76,7 +75,7 @@ const createBooking = async (req, res) => {
 
     res.status(201).json({
       message: "Booking successful",
-      bookingId: insertResult.rows[0].booking_id,
+      bookingId: insertResult.insertId,
       amount,
       hours,
     });
@@ -89,17 +88,18 @@ const createBooking = async (req, res) => {
 // ================= GET MY BOOKINGS =================
 const getMyBookings = async (req, res) => {
   try {
-    const result = await pool.query(
+    const [rows] = await db.query(
       `SELECT b.*, p.name AS parking_name
        FROM booking b
        JOIN parking_lots p ON b.parking_lot_id = p.id
-       WHERE b.user_id = $1
+       WHERE b.user_id = ?
        ORDER BY b.booking_id DESC`,
       [req.user.id]
     );
 
-    res.json(result.rows);
+    res.json(rows);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "DB error" });
   }
 };
@@ -109,38 +109,39 @@ const cancelBooking = async (req, res) => {
   try {
     const bookingId = req.params.id;
 
-    const result = await pool.query(
-      "SELECT * FROM booking WHERE booking_id = $1",
+    const [rows] = await db.query(
+      "SELECT * FROM booking WHERE booking_id = ?",
       [bookingId]
     );
 
-    if (result.rows.length === 0) {
+    if (rows.length === 0) {
       return res.status(404).json({ message: "Booking not found" });
     }
 
-    const booking = result.rows[0];
+    const booking = rows[0];
     const slotColumn =
       booking.vehicle_type === "2W" ? "available2w" : "available4w";
 
-    await pool.query(
-      `UPDATE parking_lots SET ${slotColumn} = ${slotColumn} + 1 WHERE id = $1`,
+    await db.query(
+      `UPDATE parking_lots SET ${slotColumn} = ${slotColumn} + 1 WHERE id = ?`,
       [booking.parking_lot_id]
     );
 
     const refundAmount = booking.amount * 0.8;
 
-    await pool.query(
+    await db.query(
       `UPDATE booking
        SET payment_status='Cancelled',
            paid='No',
-           refund_amount=$1,
+           refund_amount=?,
            cancellation_time=NOW()
-       WHERE booking_id=$2`,
+       WHERE booking_id=?`,
       [refundAmount, bookingId]
     );
 
     res.json({ message: "Booking cancelled", refundAmount });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "Cancel failed" });
   }
 };
@@ -149,5 +150,4 @@ module.exports = {
   createBooking,
   getMyBookings,
   cancelBooking,
- 
 };
